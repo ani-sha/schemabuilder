@@ -1,20 +1,24 @@
 package com.example.schemabuilder;
 
 import graphql.Scalars;
-import graphql.schema.GraphQLFieldDefinition;
-import graphql.schema.GraphQLObjectType;
-import graphql.schema.GraphQLScalarType;
+import graphql.schema.*;
+import graphql.schema.idl.SchemaPrinter;
 import org.springframework.stereotype.Component;
 
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 @Component
 public class Metadata {
 
-    public DatabaseMetaData databaseMetaData;
+    public static DatabaseMetaData databaseMetaData;
+
+    public static ResultSet resultSet = null;
+    public static HashMap<String,String> data = null;
+    public static GraphQLSchema graphQLSchema = null;
+    public static GraphQLObjectType graphQLObjectType = null;
+
+
 
     public void DisplayMetaData() throws SQLException {
 
@@ -40,36 +44,55 @@ public class Metadata {
     }
 
     public void getColumnMetaData(ArrayList<String> tables) throws SQLException {
-        ResultSet resultSet = null;
-        HashMap<String,String> data = null;
 
         for(String actualTable : tables) {
             resultSet = databaseMetaData.getColumns(null, null, (String) actualTable, null);
 
-            System.out.println(actualTable.toUpperCase());
+            graphQLObjectType = GraphQLObjectType.newObject()
+                                    .name("Query")
+                                    .build();
 
             while (resultSet.next()) {
-                data = new HashMap<>();
-                data.put(resultSet.getString("COLUMN_NAME"),resultSet.getString("TYPE_NAME"));
+                data  = new HashMap<>();
+                data.put(resultSet.getString("COLUMN_NAME"), resultSet.getString("TYPE_NAME"));
 
-                for (Map.Entry<String,String> map : data.entrySet()) {
+                graphQLObjectType = GraphQLObjectType.newObject()
+                        .name(actualTable)
+                        .fields(getFields())
+                        .field(GraphQLFieldDefinition.newFieldDefinition().name("ANY").type(Scalars.GraphQLString).build())
+                        .build();
 
-                    GraphQLScalarType returnType = ReturnType(map.getValue());
+                graphQLSchema = GraphQLSchema.newSchema()
+                        .query(graphQLObjectType)
+                        .build();
 
-                    GraphQLObjectType newObject = GraphQLObjectType.newObject()
-                            .name(map.getKey())
-                            .field(GraphQLFieldDefinition.newFieldDefinition()
-                                    .name(map.getValue())
-                                    .type(returnType)
-                            )
-                            .build();
-                    System.out.println(newObject);
-                }
+                SchemaPrinter sp = new SchemaPrinter();
+                String schema = sp.print(graphQLSchema);
+                System.out.println(schema);
             }
         }
     }
 
-    public GraphQLScalarType ReturnType(String type) {
+
+    public static List<GraphQLFieldDefinition> getFields() {
+
+        List<GraphQLFieldDefinition> list = new ArrayList<>();
+
+        for (Map.Entry<String,String> hm : data.entrySet()) {
+
+            list.add(GraphQLFieldDefinition.newFieldDefinition()
+                    .name(hm.getKey())
+                    .type(ReturnType(hm.getValue()))
+                    .build());
+        }
+
+//        for(GraphQLFieldDefinition s : list)
+//            System.out.println(s);
+
+        return list;
+    }
+
+    public static GraphQLScalarType ReturnType(String type) {
         if(type.equals("long"))
             return Scalars.GraphQLLong;
         else if (type.equals("string"))
