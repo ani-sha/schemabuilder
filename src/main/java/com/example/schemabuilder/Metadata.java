@@ -16,11 +16,10 @@ public class Metadata {
     public static ResultSet resultSet = null;
     public static HashMap<String,String> data = null;
     public static GraphQLSchema graphQLSchema = null;
-    public static GraphQLObjectType graphQLObjectType = null;
+    public static GraphQLObjectType objectType = null;
+    public static ArrayList<String> tables = null;
 
-
-
-    public void DisplayMetaData() throws SQLException {
+    public static void DisplayMetaData() throws Exception {
 
         Connection connection = DriverManager.getConnection("jdbc:teiid:customer@mm://localhost:31000", "sa", "sa");
         databaseMetaData = connection.getMetaData();
@@ -28,69 +27,58 @@ public class Metadata {
         System.out.println("USER NAME : " + databaseMetaData.getUserName());
         System.out.println("DRIVER NAME : " + databaseMetaData.getDriverName());
 
-        getColumnMetaData(getTableMetaData());
+        getTableMetaData();
     }
 
-    public ArrayList getTableMetaData() throws SQLException {
+    public static void getTableMetaData() throws Exception {
+
         String table[] = {"TABLE"};
-        ResultSet resultSet = null;
-        ArrayList tables = null;
+
         resultSet = databaseMetaData.getTables(null,null,null,table);
         tables = new ArrayList();
+
         while(resultSet.next()) {
             tables.add(resultSet.getString("TABLE_NAME"));
         }
-        return tables;
-    }
-
-    public void getColumnMetaData(ArrayList<String> tables) throws SQLException {
 
         for(String actualTable : tables) {
-            resultSet = databaseMetaData.getColumns(null, null, (String) actualTable, null);
 
-            graphQLObjectType = GraphQLObjectType.newObject()
-                                    .name("Query")
-                                    .build();
+            createSchema(actualTable);
 
-            while (resultSet.next()) {
-                data  = new HashMap<>();
-                data.put(resultSet.getString("COLUMN_NAME"), resultSet.getString("TYPE_NAME"));
+        }
+    }
 
-                graphQLObjectType = GraphQLObjectType.newObject()
-                        .name(actualTable)
-                        .fields(getFields())
-                        .field(GraphQLFieldDefinition.newFieldDefinition().name("ANY").type(Scalars.GraphQLString).build())
-                        .build();
+    public static void createSchema(String tableName) throws Exception {
+        resultSet = databaseMetaData.getColumns(null, null, (String) tableName, null);
 
-                graphQLSchema = GraphQLSchema.newSchema()
-                        .query(graphQLObjectType)
-                        .build();
+        GraphQLObjectType.Builder graphQLObjectType = GraphQLObjectType.newObject();
 
-                SchemaPrinter sp = new SchemaPrinter();
-                String schema = sp.print(graphQLSchema);
-                System.out.println(schema);
+        System.out.println("-------------Schema for Table " + tableName + "----------------");
+
+        while (resultSet.next()) {
+            data  = new HashMap<>();
+            data.put(resultSet.getString("COLUMN_NAME"), resultSet.getString("TYPE_NAME"));
+
+            for (Map.Entry<String, String> hm : data.entrySet()) {
+
+                graphQLObjectType
+                        .name(tableName)
+                        .field(GraphQLFieldDefinition.newFieldDefinition()
+                                .name(hm.getKey())
+                                .type(ReturnType(hm.getValue())));
+                objectType = graphQLObjectType.build();
+
             }
         }
+        graphQLSchema = GraphQLSchema.newSchema()
+                    .query(objectType)
+                    .build();
+
+            SchemaPrinter sp = new SchemaPrinter();
+            String schema = sp.print(graphQLSchema);
+            System.out.println(schema);
     }
 
-
-    public static List<GraphQLFieldDefinition> getFields() {
-
-        List<GraphQLFieldDefinition> list = new ArrayList<>();
-
-        for (Map.Entry<String,String> hm : data.entrySet()) {
-
-            list.add(GraphQLFieldDefinition.newFieldDefinition()
-                    .name(hm.getKey())
-                    .type(ReturnType(hm.getValue()))
-                    .build());
-        }
-
-//        for(GraphQLFieldDefinition s : list)
-//            System.out.println(s);
-
-        return list;
-    }
 
     public static GraphQLScalarType ReturnType(String type) {
         if(type.equals("long"))
