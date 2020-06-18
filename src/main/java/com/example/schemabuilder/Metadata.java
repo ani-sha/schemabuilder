@@ -14,18 +14,14 @@ public class Metadata {
     public static DatabaseMetaData databaseMetaData;
 
     public static ResultSet resultSet = null;
-    public static HashMap<String,String> data = null;
-    public static GraphQLSchema graphQLSchema = null;
-    public static GraphQLObjectType objectType = null;
     public static ArrayList<String> tables = null;
+    public static SchemaPrinter schemaPrinter = new SchemaPrinter();
+
 
     public static void DisplayMetaData() throws Exception {
 
         Connection connection = DriverManager.getConnection("jdbc:teiid:customer@mm://localhost:31000", "sa", "sa");
         databaseMetaData = connection.getMetaData();
-
-        System.out.println("USER NAME : " + databaseMetaData.getUserName());
-        System.out.println("DRIVER NAME : " + databaseMetaData.getDriverName());
 
         getTableMetaData();
     }
@@ -53,30 +49,18 @@ public class Metadata {
 
         GraphQLObjectType.Builder graphQLObjectType = GraphQLObjectType.newObject();
 
-        System.out.println("-------------Schema for Table " + tableName + "----------------");
-
         while (resultSet.next()) {
-            data  = new HashMap<>();
-            data.put(resultSet.getString("COLUMN_NAME"), resultSet.getString("TYPE_NAME"));
-
-            for (Map.Entry<String, String> hm : data.entrySet()) {
 
                 graphQLObjectType
-                        .name(tableName)
+                        .name(tableName.toLowerCase())
                         .field(GraphQLFieldDefinition.newFieldDefinition()
-                                .name(hm.getKey())
-                                .type(ReturnType(hm.getValue())));
-                objectType = graphQLObjectType.build();
-
-            }
+                                .name(resultSet.getString("COLUMN_NAME"))
+                                .type(GraphQLNonNull.nonNull(ReturnType(resultSet.getString("TYPE_NAME")))))
+                        .build();
         }
-        graphQLSchema = GraphQLSchema.newSchema()
-                    .query(objectType)
-                    .build();
 
-            SchemaPrinter sp = new SchemaPrinter();
-            String schema = sp.print(graphQLSchema);
-            System.out.println(schema);
+            String printSchema = schemaPrinter.print(graphQLObjectType.build());
+            System.out.println(printSchema);
     }
 
 
