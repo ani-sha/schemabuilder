@@ -63,7 +63,7 @@ public class Metadata {
             System.out.println(printSchema);
     }
 
-
+    //TODO : Add other types
     public static GraphQLScalarType ReturnType(String type) {
         if(type.equals("long"))
             return Scalars.GraphQLLong;
